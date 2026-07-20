@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from .collector import collect_all
 from .schemas import parse_country, parse_ip, parse_weather
-from .storage import save_and_benchmark
+from .storage import render_summary_table, save_and_benchmark
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,10 +37,12 @@ def main() -> None:
         logger.error("스키마 검증 실패로 파이프라인을 종료합니다.")
         sys.exit(1)
 
-    save_and_benchmark(weather_records, "weather")
-    save_and_benchmark(country_record, "country")
-    save_and_benchmark(ip_record, "ip")
-
+    results = {
+        "weather": save_and_benchmark(weather_records, "weather"),
+        "country": save_and_benchmark(country_record, "country"),
+        "ip": save_and_benchmark(ip_record, "ip"),
+    }
+    logger.info("저장/성능 비교 결과\n%s", render_summary_table(results))
     logger.info("파이프라인 실행 완료")
 
 

@@ -1,6 +1,7 @@
 """검증된 데이터를 CSV/Parquet으로 저장하고 읽기·쓰기 성능을 비교한다."""
 import logging
 import time
+import unicodedata
 
 import pandas as pd
 from pydantic import BaseModel
@@ -8,6 +9,15 @@ from pydantic import BaseModel
 from . import config
 
 logger = logging.getLogger(__name__)
+
+_TABLE_HEADERS = [
+    "데이터셋",
+    "행수",
+    "CSV 쓰기(평균/콜드)",
+    "CSV 읽기(평균/콜드)",
+    "Parquet 쓰기(평균/콜드)",
+    "Parquet 읽기(평균/콜드)",
+]
 
 
 def _to_dataframe(records: list[BaseModel] | BaseModel) -> pd.DataFrame:
@@ -47,22 +57,49 @@ def save_and_benchmark(
         "parquet_write": lambda: df.to_parquet(parquet_path, index=False),
         "parquet_read": lambda: pd.read_parquet(parquet_path),
     }
-    timings: dict[str, float] = {}
+    timings: dict[str, float] = {"rows": len(df)}
     for step_name, fn in steps.items():
         cold, avg = _benchmark_step(fn, rounds)
         timings[f"{step_name}_cold"] = cold
         timings[f"{step_name}_avg"] = avg
 
-    logger.info(
-        "[%s] %d행, %d회 측정 (평균/콜드스타트) — "
-        "CSV 쓰기 %.4fs/%.4fs·읽기 %.4fs/%.4fs, "
-        "Parquet 쓰기 %.4fs/%.4fs·읽기 %.4fs/%.4fs",
-        name,
-        len(df),
-        rounds,
-        timings["csv_write_avg"], timings["csv_write_cold"],
-        timings["csv_read_avg"], timings["csv_read_cold"],
-        timings["parquet_write_avg"], timings["parquet_write_cold"],
-        timings["parquet_read_avg"], timings["parquet_read_cold"],
-    )
     return timings
+
+
+def _display_width(text: str) -> int:
+    """한글 등 동아시아 넓은 문자를 2칸으로 계산해 터미널 표시 폭을 구한다."""
+    return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
+
+
+def _pad(text: str, width: int) -> str:
+    """표시 폭 기준으로 오른쪽에 공백을 채워 열을 정렬한다."""
+    return text + " " * (width - _display_width(text))
+
+
+def render_summary_table(results: dict[str, dict[str, float]]) -> str:
+    """데이터셋별 저장/성능 비교 결과를 정렬된 표 문자열로 렌더링한다."""
+    rows = [
+        [
+            name,
+            str(int(t["rows"])),
+            f"{t['csv_write_avg']:.4f}s / {t['csv_write_cold']:.4f}s",
+            f"{t['csv_read_avg']:.4f}s / {t['csv_read_cold']:.4f}s",
+            f"{t['parquet_write_avg']:.4f}s / {t['parquet_write_cold']:.4f}s",
+            f"{t['parquet_read_avg']:.4f}s / {t['parquet_read_cold']:.4f}s",
+        ]
+        for name, t in results.items()
+    ]
+
+    widths = [
+        max(_display_width(_TABLE_HEADERS[i]), *(_display_width(r[i]) for r in rows))
+        for i in range(len(_TABLE_HEADERS))
+    ]
+    separator = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
+
+    def format_row(cols: list[str]) -> str:
+        return "| " + " | ".join(_pad(c, widths[i]) for i, c in enumerate(cols)) + " |"
+
+    lines = [separator, format_row(_TABLE_HEADERS), separator]
+    lines += [format_row(r) for r in rows]
+    lines.append(separator)
+    return "\n".join(lines)
