@@ -14,7 +14,11 @@ class WeatherHourlyRecord(BaseModel):
     """Open-Meteo 서울 시간대별 기온·강수확률 레코드."""
 
     time: datetime
+    # 서울 계절 범위가 아니라 지구 지표 기온 관측 극값(최고 약 56.7℃, 최저 약 -89.2℃) 기준의
+    # 이상치 필터. 서울 범위로 좁히면 실제 발생 가능한 이상 고온/한파까지 걸러질 수 있어
+    # 여유를 두고 -50~60으로 설정.
     temperature_2m: float = Field(..., ge=-50, le=60, description="섭씨 기온")
+    # 확률(%)의 정의상 0~100을 벗어날 수 없음
     precipitation_probability: int = Field(..., ge=0, le=100, description="강수확률(%)")
 
 
@@ -27,10 +31,14 @@ class CountryInfo(BaseModel):
     capital: str
     region: str
     subregion: str
+    # 국가로 존재하는 이상 인구는 항상 1명 이상
     population: int = Field(..., gt=0)
+    # 국토 면적도 물리적으로 항상 양수
     area: float = Field(..., gt=0)
-    alpha2_code: str = Field(..., alias="alpha2Code")
-    alpha3_code: str = Field(..., alias="alpha3Code")
+    # ISO 3166-1 alpha-2 코드는 고정 2자리 (예: KR)
+    alpha2_code: str = Field(..., alias="alpha2Code", min_length=2, max_length=2)
+    # ISO 3166-1 alpha-3 코드는 고정 3자리 (예: KOR)
+    alpha3_code: str = Field(..., alias="alpha3Code", min_length=3, max_length=3)
 
 
 class IPLocationInfo(BaseModel):
@@ -43,7 +51,9 @@ class IPLocationInfo(BaseModel):
     country_code: str = Field(..., alias="countryCode")
     region_name: str = Field(..., alias="regionName")
     city: str
+    # 위도의 정의상 -90(남극)~90(북극)을 벗어날 수 없음
     lat: float = Field(..., ge=-90, le=90)
+    # 경도의 정의상 -180~180을 벗어날 수 없음
     lon: float = Field(..., ge=-180, le=180)
     timezone: str
     isp: str
