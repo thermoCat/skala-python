@@ -21,6 +21,8 @@ Open-Meteo(서울 3일 시간대별 기온·강수확률), countries.dev(한국 
 
 ## 실행 방법
 
+Python 3.11 이상이 필요합니다 (`pyproject.toml`의 ruff `target-version` 기준).
+
 ```bash
 python -m venv venv
 source venv/bin/activate
